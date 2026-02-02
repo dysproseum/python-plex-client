@@ -37,7 +37,6 @@ for library in libraries:
           )
           submenu.items.append(command_item)
   
-    # end movie for loop
     submenu_item = SubmenuItem(library.title, submenu=submenu, menu=menu)
     menu.items.append(submenu_item)
     print('')
@@ -47,12 +46,14 @@ for library in libraries:
     shows = plex.library.section(library.title)
     for show in shows.search():
       print(show.title)
-      # make menu item for show itself containing seasons
+
+      # Make menu item for show itself containing seasons
       show_menu = CursesMenu(show.title)
       seasons = show.seasons()
       for season in seasons:
         print(f"- Season {season.index}")
-        # then each season is also a submenu
+
+        # Then each season is also a submenu
         season_menu = CursesMenu(f"Season {season.index}")
         episodes = season.episodes()
         for episode in episodes:
@@ -75,7 +76,47 @@ for library in libraries:
     menu.items.append(submenu_item)
 
   if library.TYPE == 'artist':
-    continue
+    submenu = CursesMenu(library.title)
+
+    music = plex.library.section(library.title)
+    albums = music.albums()
+    # don't have first album yet to get its artist
+    # just walk through albums. ignore filter by artist for now.
+    for album in albums:
+      artist = album.artist()
+      title = f"{artist.title} - {album.title} ({album.year})"
+      print(title)
+      album_menu = CursesMenu(title)
+
+      url_array = []
+      for track in album.tracks():
+        for obj in track.media:
+          stream_url = track.getStreamURL()
+          command_item = CommandItem(
+            track.title,
+            "mplayer -nolirc -fs \"" + stream_url + "\"",
+          )
+          album_menu.items.append(command_item)
+          url_array.append(stream_url)
+
+      # Additional items to play all
+      quoted_params = [f'"{url}"' for url in url_array]
+      flat_params = (' ').join(quoted_params)
+      play_all_item = CommandItem(
+        ">> Play Album >>",
+        f"mplayer -nolirc -fs {flat_params}",
+      )
+      album_menu.items.append(play_all_item)
+      shuffle_all_item = CommandItem(
+        ">> Shuffle Album >>",
+        f"mplayer -nolirc -fs -shuffle {flat_params}",
+      )
+      album_menu.items.append(shuffle_all_item)
+      album_item = SubmenuItem(title, submenu=album_menu, menu=submenu)
+      submenu.items.append(album_item)
+
+    submenu_item = SubmenuItem(library.title, submenu=submenu, menu=menu)
+    menu.items.append(submenu_item)
 
 os.system('cls||clear')
 menu.show()
