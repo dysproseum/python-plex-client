@@ -5,16 +5,34 @@ from cursesmenu import CursesMenu
 from cursesmenu.items import CommandItem, FunctionItem, MenuItem, SubmenuItem
 from dotenv import load_dotenv
 import os
+import subprocess
 
 load_dotenv()
-
 baseurl = os.getenv('PLEX_BASEURL')
 token = os.getenv('PLEX_TOKEN')
 videoResolution = os.getenv('PLEX_VIDEO_RESOLUTION', '1920x1080')
 plex = PlexServer(baseurl, token)
 
-# Menu library sections
-menu = CursesMenu("Plex Client", "Choose Library")
+menu_title = "Plex Client"
+menu_subtitle = "Choose Library"
+vo = None
+
+# Callback to start player.
+def launch_player(stream_url):
+  command = f"mplayer -really-quiet -nolirc -framedrop"
+  global vo
+  if vo == "aa":
+    command += " -vo aa -monitorpixelaspect 0.5"
+  elif vo == "caca":
+    command += " -vo caca"
+  else:
+    command += " -fs"
+  command += f" \"{stream_url}\""
+  print(command)
+  subprocess.call(command, shell=True)
+
+# Main menu.
+menu = CursesMenu(menu_title, menu_subtitle)
 libraries = plex.library.sections()
 for library in libraries:
   print(library.title)
@@ -31,12 +49,12 @@ for library in libraries:
         for part in obj.parts:
           file_url = baseurl + movie.key
           stream_url = movie.getStreamURL(videoResolution=videoResolution)
-          command_item = CommandItem(
+          function_item = FunctionItem(
             video.title,
-            "mplayer -really-quiet -nolirc -fs \"" + stream_url + "\"",
+            launch_player,
+            [stream_url]
           )
-          submenu.items.append(command_item)
-  
+          submenu.items.append(function_item)
     submenu_item = SubmenuItem(library.title, submenu=submenu, menu=menu)
     menu.items.append(submenu_item)
     print('')
@@ -60,11 +78,12 @@ for library in libraries:
           for obj in episode.media:
             file_url = baseurl + episode.key
             stream_url = episode.getStreamURL(videoResolution=videoResolution)
-            command_item = CommandItem(
+            function_item = FunctionItem(
               episode.title,
-              "mplayer -really-quiet -nolirc -fs \"" + stream_url + "\"",
+              launch_player,
+              [stream_url]
             )
-            season_menu.items.append(command_item)
+            season_menu.items.append(function_item)
 
         season_item = SubmenuItem(f"Season {season.index}", submenu=season_menu, menu=show_menu)
         show_menu.items.append(season_item)
@@ -74,6 +93,7 @@ for library in libraries:
 
     submenu_item = SubmenuItem(library.title, submenu=submenu, menu=menu)
     menu.items.append(submenu_item)
+    print('')
 
   if library.TYPE == 'artist':
     submenu = CursesMenu(library.title)
@@ -118,5 +138,27 @@ for library in libraries:
     submenu_item = SubmenuItem(library.title, submenu=submenu, menu=menu)
     menu.items.append(submenu_item)
 
+# Menu item to set video output filter.
+def set_video_output(menu):
+  global vo
+  if vo == None:
+    vo = "aa"
+  elif vo == "aa":
+    vo = "caca"
+  else:
+    vo = None
+
+  global vo_item
+  vo_item.text = f">> Video Output Filter ({vo})"
+  menu.refresh_screen()
+
+vo_item = FunctionItem(
+  ">> Video Output Filter (None)",
+  set_video_output,
+  [menu]
+)
+menu.items.append(vo_item)
+
+# Start.
 os.system('cls||clear')
 menu.show()
